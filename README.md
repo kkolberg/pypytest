@@ -9,6 +9,7 @@ for osx do
     pip install virtualenv
     brew install yajl
     pip install yajl-py==2.0.2
+    pip install cffi
     ```
 
 2. clone
