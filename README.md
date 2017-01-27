@@ -2,7 +2,7 @@
 
 for osx do
 
-1.
+1. os stuff
 
     ```sh
     brew install pypy
@@ -13,7 +13,7 @@ for osx do
 
 2. clone
 
-3. 
+3. project stuff
 
     ```sh
     cd <git folder>
@@ -23,3 +23,4 @@ for osx do
     source .venv/bin/activate
     pip install -r requirements.txt
     ```
+4. vscode make workspace settings has "python.pythonPath": "${workspaceRoot}/.venv/bin/pypy"
