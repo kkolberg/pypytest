@@ -2,7 +2,6 @@
 Chunk a very large JSON file into smaller 10,000 record files
 """
 from time import time
-from random import randint
 import ijson.backends.yajl2_cffi as ijson
 import simplejson as json
 
@@ -17,8 +16,7 @@ def load_json(filename):
     with open(filename, 'rt') as __fd:
         objects = ijson.items(__fd, 'item')
         people = (o for o in objects)
-        # Variable chunk size to get files above and below 5MB
-        chunk_size = randint(8000, 12000)
+        chunk_size = 15000
         start_time = time()
         for person in people:
             current_row = current_row + 1
@@ -33,7 +31,6 @@ def load_json(filename):
                 records = []
                 current_row = 0
                 files = files + 1
-                chunk_size = randint(8000, 12000)
     # Catch any remainder
     if records.count > 0:
         end_time = time()
