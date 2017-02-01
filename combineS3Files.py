@@ -19,44 +19,73 @@ MIN_S3_SIZE = 5500000
 # Setup logger to display timestamp
 logging.basicConfig(format='%(asctime)s => %(message)s')
 
+def process_concatenation(args):
+    """
+    Coordinate concatenation of files in an S3 Bucket
+    """
+    logging.warning(
+        "Assembling files in %s/%s to %s/%s, with a max size of %s bytes",
+        BUCKET, args.folder, BUCKET, args.output, args.filesize)
+    __s3 = new_s3_client()
+    parts = generate_stats(__s3, args.folder, args.suffix, args.filesize)
+    if args.mode == "stat":
+        return
 
-def run_concatenation(folder_to_concatenate, result_filepath, file_suffix, max_filesize):
+    if args.mode == "full":
+        run_full_concatenation(__s3, parts, args.output)
+    else:
+        logging.warning(
+            "Assembling index %s, file %s/%s",
+            args.index,
+            args.index + 1,
+            len(parts))
+        run_single_concatenation(
+            __s3,
+            parts[args.index],
+            "{}-{}".format(args.output, args.index))
+
+
+def generate_stats(__s3, folder_to_concatenate, file_suffix, max_filesize):
     """
     Run Concatenation
     """
-    __s3 = new_s3_client()
     parts_list = collect_parts(__s3, folder_to_concatenate, file_suffix)
-    logging.warning("Found {} parts to concatenate in {}/{}".format(
-        len(parts_list), BUCKET, folder_to_concatenate))
+    logging.warning(
+        "Found %s parts to concatenate in %s/%s", len(parts_list), BUCKET, folder_to_concatenate)
     grouped_parts_list = chunk_by_size(parts_list, max_filesize)
-    logging.warning("Created {} concatenation groups".format(
-        len(grouped_parts_list)))
+    logging.warning("Assemble %s output files", len(grouped_parts_list))
+    return grouped_parts_list
+
+
+def run_full_concatenation(__s3, grouped_parts_list, result_filepath):
+    """
+    Run Concatenation
+    """
     for i, parts in enumerate(grouped_parts_list):
         logging.warning(
-            "Concatenating group {}/{}".format(i, len(grouped_parts_list)))
-        run_single_concatenation(__s3, parts, "{}-{}".format(result_filepath, i))
+            "Assembling group %s/%s", i, len(grouped_parts_list))
+        run_single_concatenation(
+            __s3, parts, "{}-{}".format(result_filepath, i))
 
 
-def run_single_concatenation(s3, parts_list, result_filepath):
+def run_single_concatenation(__s3, parts_list, result_filepath):
     """
     run single concatenation
     """
     if len(parts_list) > 1:
         # perform multi-part upload
-        upload_id = initiate_concatenation(s3, result_filepath)
+        upload_id = initiate_concatenation(__s3, result_filepath)
         parts_mapping = assemble_parts_to_concatenate(
-            s3, result_filepath, upload_id, parts_list)
-        complete_concatenation(s3, result_filepath, upload_id, parts_mapping)
+            __s3, result_filepath, upload_id, parts_list)
+        complete_concatenation(__s3, result_filepath, upload_id, parts_mapping)
     elif len(parts_list) == 1:
         # can perform a simple S3 copy since there is just a single file
-        resp = s3.copy_object(
+        resp = __s3.copy_object(
             Bucket=BUCKET, CopySource="{}/{}".format(BUCKET, parts_list[0][0]), Key=result_filepath)
-        logging.warning("Copied single file to {} and got response {}".format(
-            result_filepath, resp))
-    else:
         logging.warning(
-            "No files to concatenate for {}".format(result_filepath))
-        pass
+            "Copied single file to %s and got response %s", result_filepath, resp)
+    else:
+        logging.warning("No files to concatenate for %s", result_filepath)
 
 
 def chunk_by_size(parts_list, max_filesize):
@@ -89,11 +118,11 @@ def new_s3_client():
     return session.client('s3')
 
 
-def collect_parts(s3, folder, suffix):
+def collect_parts(__s3, folder, suffix):
     """
     collect parts
     """
-    return filter(lambda x: x[0].endswith(suffix), _list_all_objects_with_size(s3, folder))
+    return filter(lambda x: x[0].endswith(suffix), _list_all_objects_with_size(__s3, folder))
 
 
 def _list_all_objects_with_size(__s3, folder):
@@ -114,7 +143,7 @@ def _list_all_objects_with_size(__s3, folder):
         # if there are more entries than can be returned in one request, the key
         # of the last entry returned acts as a pagination value for the next
         # request
-        logging.warning("Found {} objects so far".format(len(objects_list)))
+        logging.warning("Found %s objects so far", len(objects_list))
         last_key = objects_list[-1][0]
         resp = __s3.list_objects(Bucket=BUCKET, Prefix=folder, Marker=last_key)
         objects_list.extend(resp_to_filelist(resp))
@@ -129,8 +158,10 @@ def initiate_concatenation(__s3, result_filename):
     that upload
     """
     resp = __s3.create_multipart_upload(Bucket=BUCKET, Key=result_filename)
-    logging.warning("Initiated concatenation attempt for {}, and got response: {}".format(
-        result_filename, resp))
+    logging.warning(
+        "Initiated concatenation attempt for %s, and got response: %s",
+        result_filename,
+        resp)
     return resp['UploadId']
 
 
@@ -149,12 +180,13 @@ def assemble_parts_to_concatenate(__s3, result_filename, upload_id, parts_list):
     # part numbers are 1 indexed
     for part_num, source_part in enumerate(s3_parts, 1):
         resp = __s3.upload_part_copy(Bucket=BUCKET,
-                                   Key=result_filename,
-                                   PartNumber=part_num,
-                                   UploadId=upload_id,
-                                   CopySource=source_part)
-        logging.warning("Setup S3 part #{}, with path: {}, and got response: {}".format(
-            part_num, source_part, resp))
+                                     Key=result_filename,
+                                     PartNumber=part_num,
+                                     UploadId=upload_id,
+                                     CopySource=source_part)
+        logging.warning(
+            "Setup S3 part #%s, with path: %s, and got response: %s",
+            part_num, source_part, resp)
         parts_mapping.append(
             {'ETag': resp['CopyPartResult']['ETag'][1:-1], 'PartNumber': part_num})
 
@@ -165,21 +197,22 @@ def assemble_parts_to_concatenate(__s3, result_filename, upload_id, parts_list):
     for source_part in local_parts:
         temp_filename = "/tmp/{}".format(source_part.replace("/", "_"))
         __s3.download_file(Bucket=BUCKET, Key=source_part,
-                         Filename=temp_filename)
+                           Filename=temp_filename)
 
         with open(temp_filename, 'rb') as f:
             small_parts.append(f.read())
         os.remove(temp_filename)
         logging.warning(
-            "Downloaded and copied small part with path: {}".format(source_part))
+            "Downloaded and copied small part with path: %s", source_part)
 
     if len(small_parts) > 0:
         last_part_num = part_num + 1
         last_part = ''.join(small_parts)
         resp = __s3.upload_part(Bucket=BUCKET, Key=result_filename,
-                              PartNumber=last_part_num, UploadId=upload_id, Body=last_part)
-        logging.warning("Setup local part #{} from {} small files, and got response: {}".format(
-            last_part_num, len(small_parts), resp))
+                                PartNumber=last_part_num, UploadId=upload_id, Body=last_part)
+        logging.warning(
+            "Setup local part #%s from %s small files, and got response: %s",
+            last_part_num, len(small_parts), resp)
         parts_mapping.append(
             {'ETag': resp['ETag'][1:-1], 'PartNumber': last_part_num})
 
@@ -193,16 +226,18 @@ def complete_concatenation(__s3, result_filename, upload_id, parts_mapping):
     if len(parts_mapping) == 0:
         __s3.abort_multipart_upload(
             Bucket=BUCKET, Key=result_filename, UploadId=upload_id)
-        logging.warning("Aborted concatenation for file {}, with upload id #{} due to empty parts mapping".format(
-            result_filename, upload_id))
+        logging.warning(
+            "Aborted concatenation for file %s, with upload id #%s due to empty parts mapping",
+            result_filename, upload_id)
     else:
         __s3.complete_multipart_upload(
             Bucket=BUCKET,
             Key=result_filename,
             UploadId=upload_id,
             MultipartUpload={'Parts': parts_mapping})
-        logging.warning("Finished concatenation for file {}, with upload id #{}, and parts mapping: {}".format(
-            result_filename, upload_id, parts_mapping))
+        logging.warning(
+            "Finished concatenation for file %s, with upload id #%s, and parts mapping: %s",
+            result_filename, upload_id, parts_mapping)
 
 
 if __name__ == "__main__":
@@ -212,33 +247,41 @@ if __name__ == "__main__":
         help="base bucket to use")
     PARSER.add_argument(
         "--folder",
+        default="data/",
         help="folder whose contents should be combined")
     PARSER.add_argument(
         "--output",
+        default="combined/part",
         help="output location for resulting merged files, relative to the specified base bucket")
     PARSER.add_argument(
         "--suffix",
+        default=".json",
         help="suffix of files to include in the combination")
     PARSER.add_argument(
         "--filesize",
         type=int,
+        default=1073741824,
         help="max filesize of the concatenated files in bytes")
+    PARSER.add_argument(
+        "--mode",
+        default="full",
+        help="full - full combination, " +
+        "stat - stat out number of output files and sizes, " +
+        "single - run a single rollup"
+    )
+    PARSER.add_argument(
+        "--index",
+        type=int,
+        default=0,
+        nargs="?",
+        help="for single combine operations, the file to combine. 0-based index."
+    )
 
     ARGS = PARSER.parse_args()
-    if ARGS.filesize is None:
-        ARGS.filesize = 1073741824
-    if ARGS.folder is None:
-        ARGS.folder = "data/"
-    if ARGS.output is None:
-        ARGS.output = "combined/part"
-    if ARGS.suffix is None:
-        ARGS.suffix = ".json"
-
-    logging.warning("Combining files in {}/{} to {}/{}, with a max size of {} bytes".format(
-        BUCKET, ARGS.folder, BUCKET, ARGS.output, ARGS.filesize))
     BUCKET = ARGS.bucket
-    GLOBAL_START_TIME = time()
-    run_concatenation(ARGS.folder, ARGS.output, ARGS.suffix, ARGS.filesize)
-    GLOBAL_END_TIME = time()
-    logging.warning("@@@@Total Execution Time - " + str(GLOBAL_END_TIME - GLOBAL_START_TIME))
+
+    START_TIME = time()
+    process_concatenation(ARGS)
+    END_TIME = time()
+    logging.warning("@@@@Total Execution Time - " + str(END_TIME - START_TIME))
 
