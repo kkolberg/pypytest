@@ -1,42 +1,58 @@
+"""
+Chunk a very large JSON file into smaller 10,000 record files
+"""
+from time import time
+from random import randint
 import ijson.backends.yajl2_cffi as ijson
 import simplejson as json
-from time import time
+
 
 def load_json(filename):
-     x = 0
-     files = 1
-     f = None
-     buf=8192*10000
-     records=[]
-     with open(filename, 'rt') as fd:
-        parser = ijson.parse(fd)
-        objects = ijson.items(fd, 'item')
+    """
+    Stream filename into new files in large chunks.
+    """
+    current_row = 0
+    files = 1
+    records = []
+    with open(filename, 'rt') as __fd:
+        objects = ijson.items(__fd, 'item')
         people = (o for o in objects)
-
+        # Variable chunk size to get files above and below 5MB
+        chunk_size = randint(8000, 12000)
         start_time = time()
         for person in people:
-            x = x + 1
-            
-            records.append(person)
+            current_row = current_row + 1
 
-            if x == 10000:
+            records.append(person)
+            if current_row == chunk_size:
                 end_time = time()
                 time_taken = end_time - start_time
-                print("file "+str(files) +" - " + str(time_taken))
-                start_time = time()
-                with open("./temp/sub-"+str(files)+".json", "w+") as f:
-                     for p in records:
-                         f.write(json.dumps(p)+'\n')
+                print "file " + str(files) + " - " + str(time_taken)
+                write_output(records, files)
                 start_time = time()
                 records = []
-                x = 0
+                current_row = 0
                 files = files + 1
+                chunk_size = randint(8000, 12000)
+    # Catch any remainder
+    if records.count > 0:
+        end_time = time()
+        time_taken = end_time - start_time
+        print "file " + str(files) + " - " + str(time_taken)
+        write_output(records, files)
+
+def write_output(records, files):
+    """
+    Write output file to disk
+    """
+    __f = None
+    with open("./temp/sub-" + str(files) + ".json", "w+") as __f:
+        for __p in records:
+            __f.write(json.dumps(__p) + '\n')
 
 
-if __name__ == "__main__":   
-    start_time = time()
+if __name__ == "__main__":
+    GLOBAL_START_TIME = time()
     load_json("./data.json")
-
-    end_time = time()
-    time_taken = end_time - start_time
-    print("total time - " + str(time_taken))
+    GLOBAL_END_TIME = time()
+    print "total time - " + str(GLOBAL_END_TIME - GLOBAL_START_TIME)
