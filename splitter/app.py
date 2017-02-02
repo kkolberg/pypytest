@@ -6,7 +6,7 @@ import ijson.backends.yajl2_cffi as ijson
 import simplejson as json
 import argparse
 import smart_open
-import sh
+from subprocess import call
 
 def fetchConfig(s3Config):
     with smart_open.smart_open(s3Config) as fin:
@@ -55,8 +55,7 @@ def write_output(records, files, configuration):
             __f.write(json.dumps(__p) + '\n')
 
 def sync(configuration):
-    s3 = sh.bash.bake("aws s3 sync")
-    s3.put(configuration["output"],configuration["s3"])
+    call(["aws s3 sync", configuration["output"],configuration["s3"]])
 
 if __name__ == "__main__":
     PARSER = argparse.ArgumentParser(description="Split massive file")
