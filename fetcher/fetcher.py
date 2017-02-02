@@ -8,14 +8,13 @@ import smart_open
 import requests
 
 def fetchConfig(s3Config):
-     with smart_open.smart_open(config) as fin:
+    with smart_open.smart_open(s3Config) as fin:
         configuration = json.loads(fin.read().decode("utf-8"))
     return configuration
 
-
 def fetchSalesForceObject(configuration):  
     r = requests.get(configuration["url"], stream=True)
-    with open(configuration["output", 'wb') as f:
+    with open(configuration["output"], 'wb') as f:
         for chunk in r.iter_content(chunk_size=1024): 
             if chunk: # filter out keep-alive new chunks
                 f.write(chunk)
