@@ -15,5 +15,5 @@ pip install -r ./pythonScript/requirements.txt
 echo "----- activated virtualenv and installed pip -----"
 
 echo "----- starting app.py with config $CONFIG_S3 -----"
-output = pypy ./pythonScript/app.py --config $CONFIG_S3 
+pypy ./pythonScript/app.py --config $CONFIG_S3 
 echo "----- app.py finished -----"
