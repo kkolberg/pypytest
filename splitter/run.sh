@@ -1,6 +1,9 @@
 #!/bin/bash
 CONFIG_S3=$1
 
+rm -rf '../temp'
+mkdir '../temp'
+
 echo "----- starting virtualenv -----"
 sudo -H pip install virtualenv
 virtualenv -p /usr/bin/pypy .venv
