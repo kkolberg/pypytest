@@ -6,6 +6,7 @@ import ijson.backends.yajl2_cffi as ijson
 import simplejson as json
 import argparse
 import smart_open
+import sh
 
 def fetchConfig(s3Config):
     with smart_open.smart_open(s3Config) as fin:
@@ -53,6 +54,9 @@ def write_output(records, files, configuration):
         for __p in records:
             __f.write(json.dumps(__p) + '\n')
 
+def sync(configuration):
+    s3 = sh.bash.bake("aws s3 sync")
+    s3.put(configuration["output"],configuration["s3"])
 
 if __name__ == "__main__":
     PARSER = argparse.ArgumentParser(description="Split massive file")
@@ -65,6 +69,7 @@ if __name__ == "__main__":
 
     configuration = fetchConfig(ARGS.config)
     load_json(configuration)
+    sync(configuration)
 
     GLOBAL_END_TIME = time()
     print "total time - " + str(GLOBAL_END_TIME - GLOBAL_START_TIME)
