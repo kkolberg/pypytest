@@ -55,7 +55,7 @@ def write_output(records, files, configuration):
             __f.write(json.dumps(__p) + '\n')
 
 def sync(configuration):
-    call(["aws s3 sync", configuration["output"],configuration["s3"]])
+    call(["/usr/local/bin/aws","s3", "sync", configuration["output"],configuration["s3"]])
 
 if __name__ == "__main__":
     PARSER = argparse.ArgumentParser(description="Split massive file")
